@@ -158,7 +158,7 @@ function Create( param )
 					local delay = ::network.GetDelay();
 					local str = "ping:" + delay;
 					str += ::setting.ping.ping_in_frames == true ? "["+((delay + 15) / 16)+"f]" : "";
-					str += ::rollback.resyncing() != false ? "(resyncing)" : "";
+					//str += ::rollback.resyncing() != false ? "(resyncing)" : "";
 					this.text.Set(str);
 					this.text.x = ::setting.ping.X - (this.text.width / 2);
 					this.text.y = (::setting.ping.Y - this.text.height);

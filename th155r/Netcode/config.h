@@ -9,7 +9,7 @@
 
 #include "util.h"
 
-static inline constexpr size_t PLUGIN_VERSION = 1;
+static inline constexpr size_t PLUGIN_VERSION = 2;
 
 void init_config_file();
 
