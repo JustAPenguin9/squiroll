@@ -18,6 +18,8 @@
 #endif
 
 #ifdef IMGUI_IMPLEMENTATION
+#include "../../imgui_impl_dx11.cpp"
+#include "../../imgui_impl_win32.cpp"
 #include "../../imgui.cpp"
 #include "../../imgui_draw.cpp"
 #include "../../imgui_tables.cpp"

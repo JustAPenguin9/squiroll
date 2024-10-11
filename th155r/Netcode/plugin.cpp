@@ -1,3 +1,4 @@
+#include "imgui/imgui.h"
 #include <cstddef>
 #if __INTELLISENSE__
 #undef _HAS_CXX20
@@ -315,6 +316,9 @@ SQInteger start_direct_punch_wait(HSQUIRRELVM v) {
 #define DEVICE_ADDR (0x4DAE9C_R)
 #define DEVICE_CONTEXT_ADDR (0x4DAE98_R)
 
+static bool my_tool_active = false;
+static ImColor my_color;
+
 extern "C" {
     dll_export int stdcall init_instance_v2(HostEnvironment* environment) {
         if (
@@ -399,10 +403,56 @@ extern "C" {
     }
 
     dll_export int stdcall release_instance() {
+        ImGui_ImplDX11_Shutdown();
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
         return 1;
     }
 
     dll_export int stdcall update_frame() {
+
+        ImGui_ImplDX11_NewFrame();
+        ImGui_ImplWin32_NewFrame();
+        ImGui::NewFrame();
+
+        // Create a window called "My First Tool", with a menu bar.
+        ImGui::Begin("My First Tool", &my_tool_active,
+                     ImGuiWindowFlags_MenuBar);
+        if (ImGui::BeginMenuBar()) {
+          if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Open..", "Ctrl+O")) { /* Do stuff */
+            }
+            if (ImGui::MenuItem("Save", "Ctrl+S")) { /* Do stuff */
+            }
+            if (ImGui::MenuItem("Close", "Ctrl+W")) {
+              my_tool_active = false;
+            }
+            ImGui::EndMenu();
+          }
+          ImGui::EndMenuBar();
+        }
+
+        // Edit a color stored as 4 floats
+        ImGui::ColorEdit4("Color", my_color);
+
+        // Generate samples and plot them
+        float samples[100];
+        for (int n = 0; n < 100; n++)
+          samples[n] = sinf(n * 0.2f + ImGui::GetTime() * 1.5f);
+        ImGui::PlotLines("Samples", samples, 100);
+
+        // Display contents in a scrolling region
+        ImGui::TextColored(ImVec4(1, 1, 0, 1), "Important Stuff");
+        ImGui::BeginChild("Scrolling");
+        for (int n = 0; n < 50; n++)
+          ImGui::Text("%04d: Some text", n);
+        ImGui::EndChild();
+        ImGui::End();
+
+        // Render
+        ImGui::Render();
+        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
         sq_pushroottable(v);
 
         //saving ::network.IsPlaying to a variable
