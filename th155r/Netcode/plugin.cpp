@@ -1,3 +1,4 @@
+#include <cstddef>
 #if __INTELLISENSE__
 #undef _HAS_CXX20
 #define _HAS_CXX20 0
@@ -9,6 +10,18 @@
 
 #include "kite_api.h"
 #include "PatchUtils.h"
+
+#if __has_builtin(__builtin_offsetof)
+#ifdef offsetof
+#undef offsetof
+#endif
+#define offsetof(s, m) __builtin_offsetof(s, m)
+#endif
+
+#define IMGUI_IMPLEMENTATION
+#include "imgui/misc/single_file/imgui_single_file.h"
+#include "imgui/imgui_impl_win32.h"
+#include "imgui/imgui_impl_dx11.h"
 
 #include "util.h"
 #include "log.h"
@@ -299,6 +312,9 @@ SQInteger start_direct_punch_wait(HSQUIRRELVM v) {
     return 0;
 }
 
+#define DEVICE_ADDR (0x4DAE9C_R)
+#define DEVICE_CONTEXT_ADDR (0x4DAE98_R)
+
 extern "C" {
     dll_export int stdcall init_instance_v2(HostEnvironment* environment) {
         if (
@@ -306,6 +322,17 @@ extern "C" {
             environment->get_squirrel_vm(v) &&
             environment->get_kite_api(KITE)
         ) {
+            ImGui::CreateContext();
+            ImGuiIO& io = ImGui::GetIO(); (void)io;
+            io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+            ImGui::StyleColorsDark();
+            HWND hwnd = NULL;
+            ID3D11Device* device = *(ID3D11Device**)DEVICE_ADDR;
+            ID3D11DeviceContext* device_context = *(ID3D11DeviceContext**)DEVICE_CONTEXT_ADDR;
+            environment->get_hwnd(hwnd);
+            ImGui_ImplWin32_Init(hwnd);
+            ImGui_ImplDX11_Init(device, device_context);
+
             // put any important initialization stuff here,
             // like adding squirrel globals/funcs/etc.
             sq_pushroottable(v);
