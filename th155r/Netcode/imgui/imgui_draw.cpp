@@ -31,11 +31,20 @@ Index of this file:
 #define IMGUI_DEFINE_MATH_OPERATORS
 #endif
 
+
+
 #include "imgui.h"
 #ifndef IMGUI_DISABLE
 #include "imgui_internal.h"
 #ifdef IMGUI_ENABLE_FREETYPE
 #include "misc/freetype/imgui_freetype.h"
+#endif
+
+#if __has_builtin(__builtin_offsetof)
+#ifdef offsetof
+#undef offsetof
+#endif
+#define offsetof(s, m) __builtin_offsetof(s, m)
 #endif
 
 #include <stdio.h>      // vsnprintf, sscanf, printf

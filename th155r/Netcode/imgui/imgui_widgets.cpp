@@ -44,6 +44,13 @@ Index of this file:
 #ifndef IMGUI_DISABLE
 #include "imgui_internal.h"
 
+#if __has_builtin(__builtin_offsetof)
+#ifdef offsetof
+#undef offsetof
+#endif
+#define offsetof(s, m) __builtin_offsetof(s, m)
+#endif
+
 // System includes
 #include <stdint.h>     // intptr_t
 
