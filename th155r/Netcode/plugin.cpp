@@ -315,9 +315,15 @@ SQInteger start_direct_punch_wait(HSQUIRRELVM v) {
 
 #define DEVICE_ADDR (0x4DAE9C_R)
 #define DEVICE_CONTEXT_ADDR (0x4DAE98_R)
+#define FULLSCREEN_CURSOR_CALL_ADDRA (0x023B48);
+#define FULLSCREEN_CURSOR_CALL_ADDRB (0x023CE0);
 
-static bool my_tool_active = false;
-static ImColor my_color;
+
+extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK imgui_wndproc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam){
+    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))return true;
+    return ((WNDPROC)0x23A70_R)(hWnd, msg, wParam, lParam);
+}
 
 void imgui_init(HostEnvironment* environment){
     HWND hwnd = NULL;
@@ -330,11 +336,26 @@ void imgui_init(HostEnvironment* environment){
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(device, device_context);
+    SetWindowLong(hwnd,GWL_WNDPROC, (LONG)imgui_wndproc);
 }
 
-void imgui_update(){
+ void imgui_update(){
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
+    ImGui::NewFrame();
 
-}
+    {
+        static char test_text[256] = {};
+
+        ImGui::Begin("Hello");
+        ImGui::Text("I'm a window");
+        ImGui::InputText("Textbox", test_text, sizeof(test_text));
+        ImGui::End();
+    }
+ 
+    ImGui::Render();
+    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+ }
 
 void imgui_release(){
     ImGui_ImplDX11_Shutdown();
