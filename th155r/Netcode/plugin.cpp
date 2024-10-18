@@ -336,7 +336,7 @@ void imgui_init(HostEnvironment* environment){
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(device, device_context);
-    SetWindowLong(hwnd,GWL_WNDPROC, (LONG)imgui_wndproc);
+    SetWindowLong(hwnd, GWL_WNDPROC, (LONG)imgui_wndproc);
 }
 
  void imgui_update(){
