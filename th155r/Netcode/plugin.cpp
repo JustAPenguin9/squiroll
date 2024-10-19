@@ -207,7 +207,7 @@ SQInteger sq_print(HSQUIRRELVM v) {
     }
 
     log_printf("%s", str);
-    return 0;
+    return SQ_OK;
 }
 
 SQInteger sq_fprint(HSQUIRRELVM v) {
@@ -223,8 +223,143 @@ SQInteger sq_fprint(HSQUIRRELVM v) {
         log_fprintf(file, "%s", str);
         fclose(file);
     }
-    return 0;
+    return SQ_OK;
 }
+
+SQInteger sq_log_foreach(HSQUIRRELVM v) {
+
+    if (sq_gettop(v) != 2 || SQ_FAILED(sq_gettype(v, 2))) return sq_throwerror(v, _SC("Invalid arguments... expected: <object>.\n"));
+    if (SQ_SUCCEEDED(sq_tostring(v, 2))) { 
+        const SQChar *objStr;
+        sq_getstring(v, 2, &objStr);  
+        log_printf(">>>>>>%s<<<<<<\n", objStr); 
+    } else {
+        SQUserPointer ptr;
+        sq_getuserpointer(v, 2, &ptr);
+        log_printf(">>>>>>%p<<<<<<\n", ptr);
+    }
+
+    sq_pushnull(v);
+    while (SQ_SUCCEEDED(sq_next(v, 2))) {
+        log_printf("test\n");
+        //Key|value
+        // -2|-1
+        const SQChar* key;
+        sq_getstring(v, -2, &key);
+
+        const SQChar *valstr;
+        if (SQ_FAILED(sq_getstring(v, -1, &valstr)))valstr = _SC("Unknown");
+
+        switch (sq_gettype(v, 1)) {
+            //All Value types
+            /*
+            NULL,
+            INTEGER,
+            FLOAT,
+            STRING,
+            CLOSURE(SQUIRREL FUNCTION),
+            NATIVECLOSURE(C++ FUNCTION),
+            BOOL,
+            INSTANCE,
+            CLASS,
+            ARRAY,
+            TABLE,
+            USERDATA,
+            USERPOINTER,
+            GENERATOR,
+            WEAKREF
+            */
+            case OT_NULL: {
+                log_printf(">%s : %s : NULL<\n", key, valstr);
+                break;
+            }
+
+            case OT_INTEGER: {
+                SQInteger val;
+                sq_getinteger(v, -1, &val);
+                log_printf(">%s : %s : %d<\n", key, valstr, val);
+                break;
+            }
+
+            case OT_FLOAT: {
+                SQFloat val;
+                sq_getfloat(v, -1, &val);
+                log_printf(">%s : %s : %f<\n", key, valstr, val);
+                break;
+            }
+
+            case OT_STRING: {
+                const SQChar* val;
+                sq_getstring(v, -1, &val);
+                log_printf(">%s : %s : %s<\n", key, valstr, val);
+                break;
+            }
+
+            case OT_CLOSURE: {
+                SQUnsignedInteger numParams, numFreeVars;
+                sq_getclosureinfo(v, -1, &numParams, &numFreeVars);
+                log_printf(">%s : %s : %d arguments, %d free variables<\n", key, valstr, numParams, numFreeVars);
+                break;
+            }
+
+            case OT_NATIVECLOSURE: {
+                SQUnsignedInteger numParams;
+                sq_getclosureinfo(v, -1, &numParams, nullptr);
+                log_printf(">%s : %s : %d arguments<\n", key, valstr, numParams);
+                break;
+            }
+
+            case OT_BOOL: {
+                SQBool val;
+                sq_getbool(v, -1, &val);
+                log_printf(">%s : %s : %s<\n", key, valstr, val ? "true" : "false");
+                break;
+            }
+
+            case OT_INSTANCE: {
+                sq_push(v, -1);
+                const SQChar *className;
+                if (SQ_SUCCEEDED(sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
+                    log_printf(">%s : %s : %s<\n", key, valstr, className);
+                } else {
+                    log_printf(">%s : %s : unknown<\n", key, valstr);
+                }
+                sq_pop(v, 1);
+                break;
+            }
+
+            case OT_CLASS: {
+                const SQChar *className;
+                if (SQ_SUCCEEDED(
+                        sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
+                    log_printf(">%s : %s : %s<\n", key, valstr, className);
+                } else {
+                    log_printf(">%s : %s : unknown<\n", key, valstr);
+                }
+                break;
+            }
+
+            case OT_ARRAY:
+            case OT_TABLE: {
+                SQInteger size = sq_getsize(v, -1);
+                log_printf(">%s : %s : %d<\n",key, valstr, size);
+                break;
+            }
+            default: {
+                SQUserPointer val;
+                sq_getuserpointer(v, -1, &val);
+                log_printf(">%s : %s : %p<\n", key, valstr, val);
+                break;
+            }
+        }
+        sq_pop(v, 2);
+    }
+
+    sq_pop(v, 1);
+    log_printf("<<<<<<>>>>>>\n");
+    return SQ_OK;
+}
+
 
 SQInteger r_resync_get(HSQUIRRELVM v) {
     sq_pushbool(v, resyncing);
@@ -370,7 +505,7 @@ extern "C" {
             environment->get_squirrel_vm(v) &&
             environment->get_kite_api(KITE)
         ) {
-            imgui_init(environment);
+            //imgui_init(environment);
             // put any important initialization stuff here,
             // like adding squirrel globals/funcs/etc.
             sq_pushroottable(v);
@@ -402,14 +537,7 @@ extern "C" {
             sq_createtable(v, _SC("debug"), [](HSQUIRRELVM v) {
                 sq_setfunc(v, _SC("print"), sq_print);
                 sq_setfunc(v, _SC("fprint"), sq_fprint);
-                if (EmbedData embed = get_new_file_data("debug.nut"))
-                {
-                    if (SQ_FAILED(sq_compilebuffer(v, (const SQChar *)embed.data, embed.length, _SC("compiled from buffer"), SQTrue)))
-                    {
-                        log_printf("Failed to compile script from buffer.\n");
-                    }
-                    sq_call(v, 1, SQFalse, SQTrue);
-                }
+                sq_setfunc(v, _SC("dump"), sq_log_foreach);
             });
 
             // modifications to the manbow table
@@ -437,7 +565,7 @@ extern "C" {
     }
 
     dll_export int stdcall release_instance() {
-        imgui_release();
+        //imgui_release();
         return 1;
     }
 
@@ -475,7 +603,7 @@ extern "C" {
     }
 
     dll_export int stdcall render(int, int) {
-        imgui_update();
+        //imgui_update();
         return 0;
     }
 }

@@ -279,6 +279,7 @@ void patch_file_loading() {
 
 }
 #endif
+
 // Initialization code shared by th155r and thcrap use
 // Executes before the start of the process
 void common_init(LogType log_type) {
