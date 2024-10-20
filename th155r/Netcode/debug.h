@@ -10,4 +10,7 @@
 
 #include "kite_api.h"
 
+bool CompileScriptBuffer(HSQUIRRELVM v, const char *Src, const char *to);
+HSQOBJECT SQGetObjectByName(HSQUIRRELVM v, const SQChar *name);
+
 #endif

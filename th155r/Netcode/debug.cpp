@@ -28,9 +28,6 @@
 //     return ((WNDPROC)0x23A70_R)(hWnd, msg, wParam, lParam);
 // }
 
-void test(){
-}
-
 void imgui_init(){
     // HWND hwnd = NULL;
     // ID3D11Device* device = *(ID3D11Device**)DEVICE_ADDR;
@@ -45,7 +42,7 @@ void imgui_init(){
     // SetWindowLong(hwnd, GWL_WNDPROC, (LONG)imgui_wndproc);
 }
 
- void imgui_update(){
+void imgui_update(){
     // ImGui_ImplDX11_NewFrame();
     // ImGui_ImplWin32_NewFrame();
     // ImGui::NewFrame();
@@ -61,10 +58,53 @@ void imgui_init(){
  
     // ImGui::Render();
     // ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
- }
+}
 
 void imgui_release(){
     // ImGui_ImplDX11_Shutdown();
     // ImGui_ImplWin32_Shutdown();
     // ImGui::DestroyContext();
+}
+
+bool CompileScriptBuffer(HSQUIRRELVM v, const char *Src, const char *to) {
+  bool is_compiled = false;
+  if (Src) {
+    is_compiled = SQ_SUCCEEDED(sq_compilebuffer(v, Src, strlen(Src), _SC("repl"), SQTrue));
+
+    if (is_compiled) {
+        // MessageBox(NULL, TEXT("Script compiled succesfuly."), TEXT("Squirrel
+        // Info"), MB_ICONINFORMATION);
+        //TODO:
+        /*
+        root parsing for the to variable so
+        this could work as a example "parent.nested"
+        */
+
+        if (strcmp(to,"") == 0){
+            sq_pushstring(v,_SC(to), -1);
+            if( SQ_FAILED(sq_get(v, -2))){
+                //future error handling
+            }
+        }else{
+            sq_pushroottable(v);
+        }
+        sq_call(v, 1, SQFalse, SQTrue);
+        sq_pop(v, -1);
+    } else{
+        // MessageBox(NULL, TEXT("Couldn't compile script."), TEXT("Squirrel
+        // Info"), MB_ICONERROR);
+    }
+
+    return is_compiled;
+  }
+  return false;
+}
+
+HSQOBJECT SQGetObjectByName(HSQUIRRELVM v, const SQChar *name) {
+    HSQOBJECT ret = {};
+    sq_pushstring(v, name, -1);
+    sq_get(v, -2);
+    sq_getstackobj(v, -1, &ret);
+    sq_pop(v, 1);
+    return ret;
 }
