@@ -1,4 +1,3 @@
-#include <cstddef>
 #if __INTELLISENSE__
 #undef _HAS_CXX20
 #define _HAS_CXX20 0
@@ -11,19 +10,6 @@
 #include "kite_api.h"
 #include "PatchUtils.h"
 
-#if __has_builtin(__builtin_offsetof)
-#ifdef offsetof
-#undef offsetof
-#endif
-#define offsetof(s, m) __builtin_offsetof(s, m)
-#endif
-
-#define IMGUI_IMPLEMENTATION
-#include "imgui/imgui.h"
-#include "imgui/imgui_impl_win32.h"
-#include "imgui/imgui_impl_dx11.h"
-#include <d3d11.h>
-
 #include "util.h"
 #include "log.h"
 #include "netcode.h"
@@ -31,6 +17,7 @@
 #include "file_replacement.h"
 #include "AllocMan.h"
 #include "lobby.h"
+#include "debug.h"
 
 const KiteSquirrelAPI* KITE;
 
@@ -169,8 +156,6 @@ static inline void sq_createclass(HSQUIRRELVM v, const SQChar* name, const L& la
     sq_newslot(v, -3, SQFalse);
 }
 
-static FILE* debug;
-
 SQInteger CompileBuffer(HSQUIRRELVM v) {
     const SQChar* filename;
     SQObject* pObject;
@@ -227,12 +212,12 @@ SQInteger sq_fprint(HSQUIRRELVM v) {
 }
 
 SQInteger sq_log_foreach(HSQUIRRELVM v) {
-
     if (sq_gettop(v) != 2 || SQ_FAILED(sq_gettype(v, 2))) return sq_throwerror(v, _SC("Invalid arguments... expected: <object>.\n"));
     if (SQ_SUCCEEDED(sq_tostring(v, 2))) { 
         const SQChar *objStr;
-        sq_getstring(v, 2, &objStr);  
-        log_printf(">>>>>>%s<<<<<<\n", objStr); 
+        sq_getstring(v, -1, &objStr);  
+        log_printf(">>>>>>%s<<<<<<\n", objStr);
+        sq_pop(v, 1); 
     } else {
         SQUserPointer ptr;
         sq_getuserpointer(v, 2, &ptr);
@@ -241,16 +226,17 @@ SQInteger sq_log_foreach(HSQUIRRELVM v) {
 
     sq_pushnull(v);
     while (SQ_SUCCEEDED(sq_next(v, 2))) {
-        log_printf("test\n");
         //Key|value
         // -2|-1
         const SQChar* key;
         sq_getstring(v, -2, &key);
 
         const SQChar *valstr;
-        if (SQ_FAILED(sq_getstring(v, -1, &valstr)))valstr = _SC("Unknown");
-
-        switch (sq_gettype(v, 1)) {
+        sq_tostring(v, -1);{
+            if (SQ_FAILED(sq_getstring(v, -1, &valstr)))valstr = _SC("Unknown");
+            sq_pop(v, 1);
+        }
+        switch (sq_gettype(v, -1)) {
             //All Value types
             /*
             NULL,
@@ -270,49 +256,49 @@ SQInteger sq_log_foreach(HSQUIRRELVM v) {
             WEAKREF
             */
             case OT_NULL: {
-                log_printf(">%s : %s : NULL<\n", key, valstr);
+                log_printf(">%s : %s : NULL\n", key, valstr);
                 break;
             }
 
             case OT_INTEGER: {
                 SQInteger val;
                 sq_getinteger(v, -1, &val);
-                log_printf(">%s : %s : %d<\n", key, valstr, val);
+                log_printf(">%s : %s : %d\n", key, valstr, val);
                 break;
             }
 
             case OT_FLOAT: {
                 SQFloat val;
                 sq_getfloat(v, -1, &val);
-                log_printf(">%s : %s : %f<\n", key, valstr, val);
+                log_printf(">%s : %s : %f\n", key, valstr, val);
                 break;
             }
 
             case OT_STRING: {
                 const SQChar* val;
                 sq_getstring(v, -1, &val);
-                log_printf(">%s : %s : %s<\n", key, valstr, val);
+                log_printf(">%s : %s : %s\n", key, valstr, val);
                 break;
             }
 
             case OT_CLOSURE: {
                 SQUnsignedInteger numParams, numFreeVars;
                 sq_getclosureinfo(v, -1, &numParams, &numFreeVars);
-                log_printf(">%s : %s : %d arguments, %d free variables<\n", key, valstr, numParams, numFreeVars);
+                log_printf(">%s : %s : %d arguments, %d free variables\n", key, valstr, numParams, numFreeVars);
                 break;
             }
 
             case OT_NATIVECLOSURE: {
                 SQUnsignedInteger numParams;
                 sq_getclosureinfo(v, -1, &numParams, nullptr);
-                log_printf(">%s : %s : %d arguments<\n", key, valstr, numParams);
+                log_printf(">%s : %s : %d arguments\n", key, valstr, numParams);
                 break;
             }
 
             case OT_BOOL: {
                 SQBool val;
                 sq_getbool(v, -1, &val);
-                log_printf(">%s : %s : %s<\n", key, valstr, val ? "true" : "false");
+                log_printf(">%s : %s : %s\n", key, valstr, val ? "true" : "false");
                 break;
             }
 
@@ -322,7 +308,7 @@ SQInteger sq_log_foreach(HSQUIRRELVM v) {
                 if (SQ_SUCCEEDED(sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
                     log_printf(">%s : %s : %s<\n", key, valstr, className);
                 } else {
-                    log_printf(">%s : %s : unknown<\n", key, valstr);
+                    log_printf(">%s : %s : unknown\n", key, valstr);
                 }
                 sq_pop(v, 1);
                 break;
@@ -334,7 +320,7 @@ SQInteger sq_log_foreach(HSQUIRRELVM v) {
                         sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
                     log_printf(">%s : %s : %s<\n", key, valstr, className);
                 } else {
-                    log_printf(">%s : %s : unknown<\n", key, valstr);
+                    log_printf(">%s : %s : unknown\n", key, valstr);
                 }
                 break;
             }
@@ -342,13 +328,13 @@ SQInteger sq_log_foreach(HSQUIRRELVM v) {
             case OT_ARRAY:
             case OT_TABLE: {
                 SQInteger size = sq_getsize(v, -1);
-                log_printf(">%s : %s : %d<\n",key, valstr, size);
+                log_printf(">%s : %s : %d\n",key, valstr, size);
                 break;
             }
             default: {
                 SQUserPointer val;
                 sq_getuserpointer(v, -1, &val);
-                log_printf(">%s : %s : %p<\n", key, valstr, val);
+                log_printf(">%s : %s : %p\n", key, valstr, val);
                 break;
             }
         }
@@ -446,56 +432,6 @@ SQInteger update_input_constants(HSQUIRRELVM v) {
 SQInteger start_direct_punch_wait(HSQUIRRELVM v) {
     send_lobby_punch_wait();
     return 0;
-}
-
-#define DEVICE_ADDR (0x4DAE9C_R)
-#define DEVICE_CONTEXT_ADDR (0x4DAE98_R)
-#define FULLSCREEN_CURSOR_CALL_ADDRA (0x023B48);
-#define FULLSCREEN_CURSOR_CALL_ADDRB (0x023CE0);
-
-
-extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK imgui_wndproc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam){
-    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))return true;
-    return ((WNDPROC)0x23A70_R)(hWnd, msg, wParam, lParam);
-}
-
-void imgui_init(HostEnvironment* environment){
-    HWND hwnd = NULL;
-    ID3D11Device* device = *(ID3D11Device**)DEVICE_ADDR;
-    ID3D11DeviceContext* device_context = *(ID3D11DeviceContext**)DEVICE_CONTEXT_ADDR;
-    environment->get_hwnd(hwnd);
-    ImGui::CreateContext();
-    ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-    ImGui_ImplWin32_Init(hwnd);
-    ImGui_ImplDX11_Init(device, device_context);
-    SetWindowLong(hwnd, GWL_WNDPROC, (LONG)imgui_wndproc);
-}
-
- void imgui_update(){
-    ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-
-    {
-        static char test_text[256] = {};
-
-        ImGui::Begin("Hello");
-        ImGui::Text("I'm a window");
-        ImGui::InputText("Textbox", test_text, sizeof(test_text));
-        ImGui::End();
-    }
- 
-    ImGui::Render();
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
- }
-
-void imgui_release(){
-    ImGui_ImplDX11_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
 }
 
 extern "C" {

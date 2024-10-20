@@ -170,7 +170,7 @@ function Create( param )
 			::loop.AddTask(ping);
 		}
 	}
-	::debug.dump("test");
+	::debug.dump(::battle);
 	//end of additions
 	//displayAllElements(this.team[0].master,"master.txt","");
 	if (!::network.IsActive())
