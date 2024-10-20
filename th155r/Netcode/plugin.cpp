@@ -156,6 +156,23 @@ static inline void sq_createclass(HSQUIRRELVM v, const SQChar* name, const L& la
     sq_newslot(v, -3, SQFalse);
 }
 
+void sq_throwexception(HSQUIRRELVM v, const char* src) {
+    log_printf("#####Squirrel exception from:%s#####\n", src);
+
+    sq_getlasterror(v);
+    const SQChar* errorMsg;
+    if (SQ_SUCCEEDED(sq_getstring(v, -1, &errorMsg))) {
+#if SQUNICODE
+        log_printf("%ls\n", errorMsg);
+#else
+        log_printf("%s\n", errorMsg);
+#endif
+    }
+    sq_pop(v, 1);
+
+    log_printf("#####End of stack trace#####\n");
+}
+
 SQInteger CompileBuffer(HSQUIRRELVM v) {
     const SQChar* filename;
     SQObject* pObject;
@@ -170,6 +187,7 @@ SQInteger CompileBuffer(HSQUIRRELVM v) {
 
     if (EmbedData embed = get_new_file_data(filename)) {
         if (SQ_FAILED(sq_compilebuffer(v, (const SQChar*)embed.data, embed.length, _SC("compiled from buffer"), SQFalse))) {
+            sq_throwexception(v, "CompileBuffer");
             return sq_throwerror(v, _SC("Failed to compile script from buffer.\n"));
         }
 
@@ -183,16 +201,14 @@ SQInteger CompileBuffer(HSQUIRRELVM v) {
 
 SQInteger sq_print(HSQUIRRELVM v) {
     const SQChar* str;
-    if (sq_gettop(v) != 2) {
+    if (sq_gettop(v) != 2 || 
+        SQ_FAILED(sq_getstring(v, 2, &str))
+    ) {
         return sq_throwerror(v, "Invalid arguments,expected:<string>");
     }
 
-    if (SQ_FAILED(sq_getstring(v, 2, &str))) {
-        return sq_throwerror(v, "Invalid arguments,expected a string");
-    }
-
     log_printf("%s", str);
-    return SQ_OK;
+    return 0;
 }
 
 SQInteger sq_fprint(HSQUIRRELVM v) {
@@ -200,15 +216,22 @@ SQInteger sq_fprint(HSQUIRRELVM v) {
     const SQChar* path;
     if (sq_gettop(v) != 3 ||
         SQ_FAILED(sq_getstring(v, 2, &path)) ||
-        SQ_FAILED(sq_getstring(v, 3, &str)))
-    {
+        SQ_FAILED(sq_getstring(v, 3, &str))
+    ) {
         return sq_throwerror(v, _SC("invalid arguments...expected: <file> <string>.\n"));
     }
+#if SQUNICODE
+    if (FILE* file = _wfopen(path, L"a")) {
+        log_fprintf(file, "%ls", str);
+        fclose(file);
+    }
+#else
     if (FILE* file = fopen(path, "a")) {
         log_fprintf(file, "%s", str);
         fclose(file);
     }
-    return SQ_OK;
+#endif
+    return 0;
 }
 
 SQInteger sq_log_foreach(HSQUIRRELVM v) {
