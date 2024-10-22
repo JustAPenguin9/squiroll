@@ -21,6 +21,22 @@
 #define FULLSCREEN_CURSOR_CALL_ADDRA (0x023B48);
 #define FULLSCREEN_CURSOR_CALL_ADDRB (0x023CE0);
 
+void sq_throwexception(HSQUIRRELVM v, const char* src) {
+    log_printf("#####Squirrel exception from:%s#####\n", src);
+
+    sq_getlasterror(v);
+    const SQChar* errorMsg;
+    if (SQ_SUCCEEDED(sq_getstring(v, -1, &errorMsg))) {
+#if SQUNICODE
+        log_printf("%ls\n", errorMsg);
+#else
+        log_printf("%s\n", errorMsg);
+#endif
+    }
+    sq_pop(v, 1);
+
+    log_printf("#####End of stack trace#####\n");
+}
 
 // extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 // LRESULT CALLBACK imgui_wndproc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam){
@@ -66,6 +82,145 @@ void imgui_release(){
     // ImGui::DestroyContext();
 }
 
+void show_tree(HSQUIRRELVM v, SQObject Root) {
+    sq_pushobject(v, Root);
+    if (SQ_FAILED(sq_gettype(v, -1))){
+        //sq_throwerror(v, _SC("Invalid arguments... expected: <object>.\n"));
+        log_printf("root object is not delegable\n");
+        return;
+    }
+    if (SQ_SUCCEEDED(sq_tostring(v, -1))) { 
+        const SQChar *objStr;
+        sq_getstring(v, -1, &objStr);  
+        log_printf(">>>>>>%s<<<<<<\n", objStr);
+        sq_pop(v, 1); 
+    } else {
+        SQUserPointer ptr;
+        sq_getuserpointer(v, -1, &ptr);
+        log_printf(">>>>>>%p<<<<<<\n", ptr);
+    }
+
+    sq_pushnull(v);
+    while (SQ_SUCCEEDED(sq_next(v, -2))) {
+        //Key|value
+        // -2|-1
+        const SQChar* key;
+        sq_getstring(v, -2, &key);
+
+        const SQChar *valstr;
+        sq_typeof(v, -1);{
+            if (SQ_FAILED(sq_getstring(v, -1, &valstr)))valstr = _SC("Unknown");
+            sq_pop(v, 1);
+        }
+        switch (sq_gettype(v, -1)) {
+            //All Value types
+            /*
+            NULL,
+            INTEGER,
+            FLOAT,
+            STRING,
+            CLOSURE(SQUIRREL FUNCTION),
+            NATIVECLOSURE(C++ FUNCTION),
+            BOOL,
+            INSTANCE,
+            CLASS,
+            ARRAY,
+            TABLE,
+            USERDATA,
+            USERPOINTER,
+            GENERATOR,
+            WEAKREF
+            */
+            case OT_NULL: {
+                log_printf(">%s : %s : NULL\n", key, valstr);
+                break;
+            }
+
+            case OT_INTEGER: {
+                SQInteger val;
+                sq_getinteger(v, -1, &val);
+                log_printf(">%s : %s : %d\n", key, valstr, val);
+                break;
+            }
+
+            case OT_FLOAT: {
+                SQFloat val;
+                sq_getfloat(v, -1, &val);
+                log_printf(">%s : %s : %f\n", key, valstr, val);
+                break;
+            }
+
+            case OT_STRING: {
+                const SQChar* val;
+                sq_getstring(v, -1, &val);
+                log_printf(">%s : %s : %s\n", key, valstr, val);
+                break;
+            }
+
+            case OT_CLOSURE: {
+                SQUnsignedInteger numParams, numFreeVars;
+                sq_getclosureinfo(v, -1, &numParams, &numFreeVars);
+                log_printf(">%s : %s : %d arguments, %d free variables\n", key, valstr, numParams, numFreeVars);
+                break;
+            }
+
+            case OT_NATIVECLOSURE: {
+                SQUnsignedInteger numParams;
+                sq_getclosureinfo(v, -1, &numParams, nullptr);
+                log_printf(">%s : %s : %d arguments\n", key, valstr, numParams);
+                break;
+            }
+
+            case OT_BOOL: {
+                SQBool val;
+                sq_getbool(v, -1, &val);
+                log_printf(">%s : %s : %s\n", key, valstr, val ? "true" : "false");
+                break;
+            }
+
+            case OT_INSTANCE: {
+                sq_push(v, -1);
+                const SQChar *className;
+                if (SQ_SUCCEEDED(sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
+                    log_printf(">%s : %s : %s\n", key, valstr, className);
+                } else {
+                    log_printf(">%s : %s : unknown\n", key, valstr);
+                }
+                sq_pop(v, 1);
+                break;
+            }
+
+            case OT_CLASS: {
+                const SQChar *className;
+                if (SQ_SUCCEEDED(
+                        sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
+                    log_printf(">%s : %s : %s\n", key, valstr, className);
+                } else {
+                    log_printf(">%s : %s : unknown\n", key, valstr);
+                }
+                break;
+            }
+
+            case OT_ARRAY:
+            case OT_TABLE: {
+                SQInteger size = sq_getsize(v, -1);
+                log_printf(">%s : %s : %d\n",key, valstr, size);
+                break;
+            }
+            default: {
+                SQUserPointer val;
+                sq_getuserpointer(v, -1, &val);
+                log_printf(">%s : %s : %p\n", key, valstr, val);
+                break;
+            }
+        }
+        sq_pop(v, 2);
+    }
+
+    sq_pop(v, 1);
+    log_printf("<<<<<<>>>>>>\n");
+}
+
 bool CompileScriptBuffer(HSQUIRRELVM v, const char *Src, const char *to) {
   bool is_compiled = false;
   if (Src) {
@@ -79,14 +234,14 @@ bool CompileScriptBuffer(HSQUIRRELVM v, const char *Src, const char *to) {
         root parsing for the to variable so
         this could work as a example "parent.nested"
         */
-
+        sq_pushroottable(v);
         if (strcmp(to,"") == 0){
+
             sq_pushstring(v,_SC(to), -1);
             if( SQ_FAILED(sq_get(v, -2))){
                 //future error handling
+                sq_throwexception(v, "repl");
             }
-        }else{
-            sq_pushroottable(v);
         }
         sq_call(v, 1, SQFalse, SQTrue);
         sq_pop(v, -1);

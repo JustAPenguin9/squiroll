@@ -156,23 +156,6 @@ static inline void sq_createclass(HSQUIRRELVM v, const SQChar* name, const L& la
     sq_newslot(v, -3, SQFalse);
 }
 
-void sq_throwexception(HSQUIRRELVM v, const char* src) {
-    log_printf("#####Squirrel exception from:%s#####\n", src);
-
-    sq_getlasterror(v);
-    const SQChar* errorMsg;
-    if (SQ_SUCCEEDED(sq_getstring(v, -1, &errorMsg))) {
-#if SQUNICODE
-        log_printf("%ls\n", errorMsg);
-#else
-        log_printf("%s\n", errorMsg);
-#endif
-    }
-    sq_pop(v, 1);
-
-    log_printf("#####End of stack trace#####\n");
-}
-
 SQInteger CompileBuffer(HSQUIRRELVM v) {
     const SQChar* filename;
     SQObject* pObject;
@@ -234,138 +217,149 @@ SQInteger sq_fprint(HSQUIRRELVM v) {
     return 0;
 }
 
-SQInteger sq_log_foreach(HSQUIRRELVM v) {
-    if (sq_gettop(v) != 2 || SQ_FAILED(sq_gettype(v, 2))) return sq_throwerror(v, _SC("Invalid arguments... expected: <object>.\n"));
-    if (SQ_SUCCEEDED(sq_tostring(v, 2))) { 
-        const SQChar *objStr;
-        sq_getstring(v, -1, &objStr);  
-        log_printf(">>>>>>%s<<<<<<\n", objStr);
-        sq_pop(v, 1); 
-    } else {
-        SQUserPointer ptr;
-        sq_getuserpointer(v, 2, &ptr);
-        log_printf(">>>>>>%p<<<<<<\n", ptr);
-    }
+// void tree(HSQUIRRELVM v, SQObject pRoot) {
+//     sq_pushobject(v, pRoot);
+//     if (SQ_FAILED(sq_gettype(v, -1))){
+//         //sq_throwerror(v, _SC("Invalid arguments... expected: <object>.\n"));
+//         log_printf("root object is not delegable\n");
+//         return;
+//     }
+//     if (SQ_SUCCEEDED(sq_tostring(v, -1))) { 
+//         const SQChar *objStr;
+//         sq_getstring(v, -1, &objStr);  
+//         log_printf(">>>>>>%s<<<<<<\n", objStr);
+//         sq_pop(v, 1); 
+//     } else {
+//         SQUserPointer ptr;
+//         sq_getuserpointer(v, -1, &ptr);
+//         log_printf(">>>>>>%p<<<<<<\n", ptr);
+//     }
 
-    sq_pushnull(v);
-    while (SQ_SUCCEEDED(sq_next(v, 2))) {
-        //Key|value
-        // -2|-1
-        const SQChar* key;
-        sq_getstring(v, -2, &key);
+//     sq_pushnull(v);
+//     while (SQ_SUCCEEDED(sq_next(v, -2))) {
+//         //Key|value
+//         // -2|-1
+//         const SQChar* key;
+//         sq_getstring(v, -2, &key);
 
-        const SQChar *valstr;
-        sq_tostring(v, -1);{
-            if (SQ_FAILED(sq_getstring(v, -1, &valstr)))valstr = _SC("Unknown");
-            sq_pop(v, 1);
-        }
-        switch (sq_gettype(v, -1)) {
-            //All Value types
-            /*
-            NULL,
-            INTEGER,
-            FLOAT,
-            STRING,
-            CLOSURE(SQUIRREL FUNCTION),
-            NATIVECLOSURE(C++ FUNCTION),
-            BOOL,
-            INSTANCE,
-            CLASS,
-            ARRAY,
-            TABLE,
-            USERDATA,
-            USERPOINTER,
-            GENERATOR,
-            WEAKREF
-            */
-            case OT_NULL: {
-                log_printf(">%s : %s : NULL\n", key, valstr);
-                break;
-            }
+//         const SQChar *valstr;
+//         sq_tostring(v, -1);{
+//             if (SQ_FAILED(sq_getstring(v, -1, &valstr)))valstr = _SC("Unknown");
+//             sq_pop(v, 1);
+//         }
+//         switch (sq_gettype(v, -1)) {
+//             //All Value types
+//             /*
+//             NULL,
+//             INTEGER,
+//             FLOAT,
+//             STRING,
+//             CLOSURE(SQUIRREL FUNCTION),
+//             NATIVECLOSURE(C++ FUNCTION),
+//             BOOL,
+//             INSTANCE,
+//             CLASS,
+//             ARRAY,
+//             TABLE,
+//             USERDATA,
+//             USERPOINTER,
+//             GENERATOR,
+//             WEAKREF
+//             */
+//             case OT_NULL: {
+//                 log_printf(">%s : %s : NULL\n", key, valstr);
+//                 break;
+//             }
 
-            case OT_INTEGER: {
-                SQInteger val;
-                sq_getinteger(v, -1, &val);
-                log_printf(">%s : %s : %d\n", key, valstr, val);
-                break;
-            }
+//             case OT_INTEGER: {
+//                 SQInteger val;
+//                 sq_getinteger(v, -1, &val);
+//                 log_printf(">%s : %s : %d\n", key, valstr, val);
+//                 break;
+//             }
 
-            case OT_FLOAT: {
-                SQFloat val;
-                sq_getfloat(v, -1, &val);
-                log_printf(">%s : %s : %f\n", key, valstr, val);
-                break;
-            }
+//             case OT_FLOAT: {
+//                 SQFloat val;
+//                 sq_getfloat(v, -1, &val);
+//                 log_printf(">%s : %s : %f\n", key, valstr, val);
+//                 break;
+//             }
 
-            case OT_STRING: {
-                const SQChar* val;
-                sq_getstring(v, -1, &val);
-                log_printf(">%s : %s : %s\n", key, valstr, val);
-                break;
-            }
+//             case OT_STRING: {
+//                 const SQChar* val;
+//                 sq_getstring(v, -1, &val);
+//                 log_printf(">%s : %s : %s\n", key, valstr, val);
+//                 break;
+//             }
 
-            case OT_CLOSURE: {
-                SQUnsignedInteger numParams, numFreeVars;
-                sq_getclosureinfo(v, -1, &numParams, &numFreeVars);
-                log_printf(">%s : %s : %d arguments, %d free variables\n", key, valstr, numParams, numFreeVars);
-                break;
-            }
+//             case OT_CLOSURE: {
+//                 SQUnsignedInteger numParams, numFreeVars;
+//                 sq_getclosureinfo(v, -1, &numParams, &numFreeVars);
+//                 log_printf(">%s : %s : %d arguments, %d free variables\n", key, valstr, numParams, numFreeVars);
+//                 break;
+//             }
 
-            case OT_NATIVECLOSURE: {
-                SQUnsignedInteger numParams;
-                sq_getclosureinfo(v, -1, &numParams, nullptr);
-                log_printf(">%s : %s : %d arguments\n", key, valstr, numParams);
-                break;
-            }
+//             case OT_NATIVECLOSURE: {
+//                 SQUnsignedInteger numParams;
+//                 sq_getclosureinfo(v, -1, &numParams, nullptr);
+//                 log_printf(">%s : %s : %d arguments\n", key, valstr, numParams);
+//                 break;
+//             }
 
-            case OT_BOOL: {
-                SQBool val;
-                sq_getbool(v, -1, &val);
-                log_printf(">%s : %s : %s\n", key, valstr, val ? "true" : "false");
-                break;
-            }
+//             case OT_BOOL: {
+//                 SQBool val;
+//                 sq_getbool(v, -1, &val);
+//                 log_printf(">%s : %s : %s\n", key, valstr, val ? "true" : "false");
+//                 break;
+//             }
 
-            case OT_INSTANCE: {
-                sq_push(v, -1);
-                const SQChar *className;
-                if (SQ_SUCCEEDED(sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
-                    log_printf(">%s : %s : %s<\n", key, valstr, className);
-                } else {
-                    log_printf(">%s : %s : unknown\n", key, valstr);
-                }
-                sq_pop(v, 1);
-                break;
-            }
+//             case OT_INSTANCE: {
+//                 sq_push(v, -1);
+//                 const SQChar *className;
+//                 if (SQ_SUCCEEDED(sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
+//                     log_printf(">%s : %s : %s<\n", key, valstr, className);
+//                 } else {
+//                     log_printf(">%s : %s : unknown\n", key, valstr);
+//                 }
+//                 sq_pop(v, 1);
+//                 break;
+//             }
 
-            case OT_CLASS: {
-                const SQChar *className;
-                if (SQ_SUCCEEDED(
-                        sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
-                    log_printf(">%s : %s : %s<\n", key, valstr, className);
-                } else {
-                    log_printf(">%s : %s : unknown\n", key, valstr);
-                }
-                break;
-            }
+//             case OT_CLASS: {
+//                 const SQChar *className;
+//                 if (SQ_SUCCEEDED(
+//                         sq_gettypetag(v, -1, (SQUserPointer *)&className))) {
+//                     log_printf(">%s : %s : %s<\n", key, valstr, className);
+//                 } else {
+//                     log_printf(">%s : %s : unknown\n", key, valstr);
+//                 }
+//                 break;
+//             }
 
-            case OT_ARRAY:
-            case OT_TABLE: {
-                SQInteger size = sq_getsize(v, -1);
-                log_printf(">%s : %s : %d\n",key, valstr, size);
-                break;
-            }
-            default: {
-                SQUserPointer val;
-                sq_getuserpointer(v, -1, &val);
-                log_printf(">%s : %s : %p\n", key, valstr, val);
-                break;
-            }
-        }
-        sq_pop(v, 2);
-    }
+//             case OT_ARRAY:
+//             case OT_TABLE: {
+//                 SQInteger size = sq_getsize(v, -1);
+//                 log_printf(">%s : %s : %d\n",key, valstr, size);
+//                 break;
+//             }
+//             default: {
+//                 SQUserPointer val;
+//                 sq_getuserpointer(v, -1, &val);
+//                 log_printf(">%s : %s : %p\n", key, valstr, val);
+//                 break;
+//             }
+//         }
+//         sq_pop(v, 2);
+//     }
 
-    sq_pop(v, 1);
-    log_printf("<<<<<<>>>>>>\n");
+//     sq_pop(v, 1);
+//     log_printf("<<<<<<>>>>>>\n");
+// }
+
+SQInteger sq_show_tree(HSQUIRRELVM v) {
+    SQObject pObj;
+    if (sq_gettop(v) != 2 || SQ_FAILED(sq_getstackobj(v, 2, &pObj))) return sq_throwerror(v, _SC("Invalid arguments... expected: <object>.\n"));
+    show_tree(v, pObj);
     return SQ_OK;
 }
 
@@ -496,7 +490,7 @@ extern "C" {
             sq_createtable(v, _SC("debug"), [](HSQUIRRELVM v) {
                 sq_setfunc(v, _SC("print"), sq_print);
                 sq_setfunc(v, _SC("fprint"), sq_fprint);
-                sq_setfunc(v, _SC("dump"), sq_log_foreach);
+                sq_setfunc(v, _SC("show_tree"), sq_show_tree);
             });
 
             // modifications to the manbow table
